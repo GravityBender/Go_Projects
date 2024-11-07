@@ -32,7 +32,17 @@ func main() {
 		fmt.Println("Error: ", err)
 		return
 	} else if isEmpty {
-		fmt.Println("folder path provided is empty!")
+		fmt.Println("Folder path provided is empty!")
+		return
+	}
+
+	extSlice := []string{".jpg", ".png", ".jpeg"}
+	containsImage, err := file.ContainsFileWithExtension(folderPath, extSlice)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	} else if !containsImage {
+		fmt.Println("Folder path provided does not contain any image!")
 		return
 	}
 
