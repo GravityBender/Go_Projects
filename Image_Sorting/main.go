@@ -72,23 +72,30 @@ func initiateGrouping(folderPath string) (noExifDataFoundSlice, exifParsingError
 		logger.Error("Error while reading folder contents!", slog.String("error", err.Error()))
 		return nil, nil
 	}
+
 	noExifDataFoundSlice = []string{}
 	exifParsingErrorSlice = []string{}
 	ch := make(chan struct {
 		noExifDataFound  string
 		exifParsingError string
 	})
+
 	var wg sync.WaitGroup
+	//	Iterate over all the files present in the given directory
 	for _, fileDetail := range files {
 		wg.Add(1)
+
 		go func(fileDetail os.FileInfo) {
 			defer wg.Done()
 			logger.Debug("Processing file", slog.String("FileName", fileDetail.Name()))
+
 			if !file.IsImage(fileDetail.Name()) {
 				logger.Info("File is not an image", slog.String("FileName", fileDetail.Name()))
 				return
 			}
-			rawExif, err := exif.SearchFileAndExtractExif(filepath.Join(folderPath, fileDetail.Name()))
+
+			rawExif, err := exif.SearchFileAndExtractExif(filepath.Join(folderPath, fileDetail.Name())) //	Extract the EXIF data
+			//	If there is an error then it means no EXIF data was found for that file, insert it into the channel
 			if err != nil {
 				ch <- struct {
 					noExifDataFound  string
@@ -96,8 +103,10 @@ func initiateGrouping(folderPath string) (noExifDataFoundSlice, exifParsingError
 				}{fileDetail.Name(), ""}
 				return
 			}
+
 			logger.Debug("Extracting EXIF data for: ", slog.String("File", fileDetail.Name()))
-			_, err = exif.ParseExifHeader(rawExif)
+			_, err = exif.ParseExifHeader(rawExif) //	Parse the EXIF headers
+			//	If there is an error then it means that the EXIF data was not successfully parsed for that file, insert it into the channel
 			if err != nil {
 				ch <- struct {
 					noExifDataFound  string
@@ -105,7 +114,9 @@ func initiateGrouping(folderPath string) (noExifDataFoundSlice, exifParsingError
 				}{"", fileDetail.Name()}
 				return
 			}
-			exifTagSlice, _, err := exif.GetFlatExifData(rawExif, &exif.ScanOptions{})
+
+			exifTagSlice, _, err := exif.GetFlatExifData(rawExif, &exif.ScanOptions{}) //	Get the EXIF data in the form of a slice
+			//	If there is an error then it means that the EXIF data was not successfully parsed for that file, insert it into the channel
 			if err != nil {
 				ch <- struct {
 					noExifDataFound  string
@@ -113,13 +124,17 @@ func initiateGrouping(folderPath string) (noExifDataFoundSlice, exifParsingError
 				}{"", fileDetail.Name()}
 				return
 			}
+
 			for _, exifTag := range exifTagSlice {
+				//	Tag id corresponding to DateTime
 				if exifTag.TagId == 0x9003 {
+
 					formattedDate, err := file.CreateDirIfNotCreated(exifTag.FormattedFirst, folderPath)
 					if err != nil {
 						logger.Error("Error while parsing EXIF data!", slog.String("error", err.Error()))
 						return
 					}
+
 					_, err = file.MoveFile(filepath.Join(formattedDate, fileDetail.Name()), filepath.Join(folderPath, fileDetail.Name()))
 					if err != nil {
 						logger.Error("Error while moving file!", slog.String("FileName", fileDetail.Name()), slog.String("error", err.Error()))
@@ -129,10 +144,12 @@ func initiateGrouping(folderPath string) (noExifDataFoundSlice, exifParsingError
 			}
 		}(fileDetail)
 	}
+
 	go func() {
 		wg.Wait()
 		close(ch)
 	}()
+
 	for result := range ch {
 		if result.noExifDataFound != "" {
 			noExifDataFoundSlice = append(noExifDataFoundSlice, result.noExifDataFound)
