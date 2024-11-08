@@ -94,6 +94,9 @@ func CreateDirIfNotCreated(date, folderPath string) (string, error) {
 	}
 }
 
+/*
+This function moves the file specified by the oldDir to the newDir
+*/
 func MoveFile(newDir, oldDir string) (bool, error) {
 	err := os.Rename(oldDir, newDir)
 	if err != nil {
